@@ -1,13 +1,11 @@
 import pygame as pg
 import random
 import sys
-import os
 
 pg.init()
 WIDTH, HEIGHT = 900, 600
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
 screen = pg.display.set_mode((WIDTH, HEIGHT))
-pg.display.set_caption("大富豪（4人 GUI 完全版）")
+pg.display.set_caption("大富豪（複数枚出し 完全版）")
 clock = pg.time.Clock()
 
 font = pg.font.SysFont("meiryo", 24)
@@ -29,44 +27,97 @@ def create_deck():
     return deck
 
 # -------------------------
-# CPUの行動
+# CPUの行動（1枚出しのみ）
 # -------------------------
 def cpu_play(hand, field):
     if len(hand) == 0:
         return None
 
+    # 手札をランクごとにまとめる
+    groups = {}
+    for c in hand:
+        groups.setdefault(c[1], []).append(c)
+
+    # -------------------------
+    # 場が流れている（自由に出せる）
+    # -------------------------
     if field is None:
+        # 最弱の複数枚を優先
+        multi = [g for g in groups.values() if len(g) >= 2]
+        if multi:
+            play = min(multi, key=lambda g: g[0][1])
+            for c in play:
+                hand.remove(c)
+            return play
+
+        # 複数枚が無ければ最弱の1枚
         card = min(hand, key=lambda c: c[1])
         hand.remove(card)
         return card
 
-    valid = [c for c in hand if c[1] > field[1]]
-    if not valid:
-        return None
+    # -------------------------
+    # 場が複数枚出し
+    # -------------------------
+    if isinstance(field, list):
+        need = len(field)
+        base_rank = field[0][1]
 
-    card = min(valid, key=lambda c: c[1])
-    hand.remove(card)
-    return card
+        # 同じ枚数で、場より強い複数枚を探す
+        candidates = []
+        for r, g in groups.items():
+            if len(g) == need and r > base_rank:
+                candidates.append(g)
+
+        if candidates:
+            play = min(candidates, key=lambda g: g[0][1])
+            for c in play:
+                hand.remove(c)
+            return play
+
+        return None  # 出せない
+
+    # -------------------------
+    # 場が1枚出し
+    # -------------------------
+    base_rank = field[1]
+
+    # まず複数枚を優先
+    multi = []
+    for r, g in groups.items():
+        if len(g) >= 2 and r > base_rank:
+            multi.append(g)
+
+    if multi:
+        play = min(multi, key=lambda g: g[0][1])
+        for c in play:
+            hand.remove(c)
+        return play
+
+    # 次に1枚出し
+    valid = [c for c in hand if c[1] > base_rank]
+    if valid:
+        card = min(valid, key=lambda c: c[1])
+        hand.remove(card)
+        return card
+
+    return None
 
 # -------------------------
-# カード描画（プレイヤー用）
+# カード描画
 # -------------------------
-def draw_card(x, y, card, selected=False):
+def draw_card(x, y, card):
     s, r = card
     rect = pg.Rect(x, y, 60, 90)
 
     pg.draw.rect(screen, (255, 255, 255), rect)
-    border = (0, 200, 0) if selected else (0, 0, 0)
-    pg.draw.rect(screen, border, rect, 3)
+    pg.draw.rect(screen, (0, 0, 0), rect, 3)
 
     color = (0, 0, 0) if s in ["♠", "♣"] else (200, 0, 0)
     rank_text = str(r) if r <= 10 else rank_name[r]
 
-    # 左上
     text1 = font.render(f"{s}{rank_text}", True, color)
     screen.blit(text1, (x + 3, y + 2))
 
-    # 右下（文字サイズに合わせて調整）
     text2 = font.render(f"{s}{rank_text}", True, color)
     tw, th = text2.get_size()
     screen.blit(text2, (x + 60 - tw - 3, y + 90 - th - 2))
@@ -74,30 +125,38 @@ def draw_card(x, y, card, selected=False):
     return rect
 
 # -------------------------
-# プレイヤー手札（2段）
+# プレイヤー手札（選択対応）
 # -------------------------
-def draw_player_hand(hand):
+def draw_player_hand(hand, selected_cards):
     rects = []
     for i, card in enumerate(hand):
         row = i // 10
         col = i % 10
         x = 50 + col * 70
         y = 400 + row * 100
+
+        if card in selected_cards:
+            y -= 20
+
         rect = draw_card(x, y, card)
         rects.append((rect, card))
     return rects
 
 # -------------------------
-# PASS ボタン
+# ボタン
 # -------------------------
 def draw_pass_button():
     rect = pg.Rect(700, 450, 150, 60)
     pg.draw.rect(screen, (200, 50, 50), rect)
     pg.draw.rect(screen, (255, 255, 255), rect, 3)
+    screen.blit(font.render("PASS", True, (255, 255, 255)), (740, 470))
+    return rect
 
-    text = font.render("PASS", True, (255, 255, 255))
-    screen.blit(text, (740, 470))
-
+def draw_play_button():
+    rect = pg.Rect(700, 380, 150, 60)
+    pg.draw.rect(screen, (50, 150, 50), rect)
+    pg.draw.rect(screen, (255, 255, 255), rect, 3)
+    screen.blit(font.render("出す", True, (255, 255, 255)), (740, 400))
     return rect
 
 # -------------------------
@@ -133,9 +192,7 @@ def show_result_screen(finished):
         ok_rect = pg.Rect(WIDTH//2 - 75, 500, 150, 50)
         pg.draw.rect(screen, (80, 80, 200), ok_rect)
         pg.draw.rect(screen, (255, 255, 255), ok_rect, 3)
-
-        ok_text = font.render("OK", True, (255, 255, 255))
-        screen.blit(ok_text, (WIDTH//2 - ok_text.get_width()//2, 515))
+        screen.blit(font.render("OK", True, (255, 255, 255)), (WIDTH//2 - 20, 515))
 
         pg.display.update()
 
@@ -143,10 +200,8 @@ def show_result_screen(finished):
             if event.type == pg.QUIT:
                 pg.quit()
                 sys.exit()
-
             if event.type == pg.MOUSEBUTTONDOWN:
-                mx, my = event.pos
-                if ok_rect.collidepoint(mx, my):
+                if ok_rect.collidepoint(event.pos):
                     running = False
 
 # -------------------------
@@ -168,6 +223,7 @@ def play_game():
     field = None
     message = ""
     finished = []
+    selected_cards = []
 
     turn = 0
     last_player = 0
@@ -182,29 +238,74 @@ def play_game():
             if turn == 0 and event.type == pg.MOUSEBUTTONDOWN:
                 mx, my = event.pos
 
+                # 出すボタン
+                play_rect = draw_play_button()
+                if play_rect.collidepoint(mx, my):
+
+                    if len(selected_cards) == 0:
+                        message = "カードを選択してください"
+                        continue
+
+                    # ★ 複数枚出し（同じ数字のみ）
+                    ranks = [c[1] for c in selected_cards]
+                    if len(set(ranks)) != 1:
+                        message = "同じ数字のカードだけ複数枚出せます"
+                        continue
+
+                    # 場が複数枚出し
+                    if isinstance(field, list):
+                        if len(field) != len(selected_cards):
+                            message = "枚数が違います"
+                            continue
+                        if selected_cards[0][1] <= field[0][1]:
+                            message = "弱いです"
+                            continue
+
+                    # 場が1枚出し
+                    if isinstance(field, tuple):
+                        if len(selected_cards) != 1:
+                            message = "複数枚出しはできません（場が1枚）"
+                            continue
+                        if selected_cards[0][1] <= field[1]:
+                            message = "弱いです"
+                            continue
+
+                    # 出す処理
+                    for c in selected_cards:
+                        hands[0].remove(c)
+
+                    if len(selected_cards) == 1:
+                        field = selected_cards[0]
+                    else:
+                        field = selected_cards.copy()
+
+                    selected_cards.clear()
+                    last_player = 0
+                    pass_count = 0
+                    turn = 1
+                    message = "カードを出した"
+                    continue
+
+                # PASS
                 pass_rect = draw_pass_button()
                 if pass_rect.collidepoint(mx, my):
                     message = "あなたはパスした"
                     pass_count += 1
+                    selected_cards.clear()
                     turn = 1
                     continue
 
-                rects = draw_player_hand(hands[0])
+                # カード選択
+                rects = draw_player_hand(hands[0], selected_cards)
                 for rect, card in rects:
                     if rect.collidepoint(mx, my):
-                        if field is None or card[1] > field[1]:
-                            hands[0].remove(card)
-                            field = card
-                            message = f"あなたは {card_to_text(card)} を出した"
-
-                            last_player = 0
-                            pass_count = 0
-
-                            turn = 1
+                        if card in selected_cards:
+                            selected_cards.remove(card)
                         else:
-                            message = "そのカードは出せません"
+                            selected_cards.append(card)
                         break
 
+        # CPUターン
         if turn != 0:
 
             if len(hands[turn]) == 0:
@@ -216,7 +317,18 @@ def play_game():
             card = cpu_play(hands[turn], field)
             if card:
                 field = card
-                message = f"CPU{turn} は {card_to_text(card)} を出した"
+
+                if isinstance(card, list):
+                    # 複数枚出し
+                    text = " ".join(card_to_text(c) for c in card)
+                    message = f"CPU{turn} は {text} を出した"
+                else:
+                    # 1枚出し
+                    message = f"CPU{turn} は {card_to_text(card)} を出した"
+
+                last_player = turn
+                pass_count = 0
+
                 last_player = turn
                 pass_count = 0
             else:
@@ -225,32 +337,48 @@ def play_game():
 
             turn = (turn + 1) % 4
 
+        # 場流し
         if pass_count >= 3:
             field = None
             message = "場が流れた！"
             turn = last_player
             pass_count = 0
 
+        # 上がり判定
         for i in range(4):
             if len(hands[i]) == 0 and i not in finished:
                 finished.append(i)
 
+        # 3人上がったら終了
         if len(finished) == 3:
+            for i in range(4):
+                if i not in finished:
+                    finished.append(i)
+                    break
             show_result_screen(finished)
             break
 
+        # 描画
         screen.fill((0, 120, 0))
 
+        # 場の描画
         if field:
-            draw_card(WIDTH//2 - 30, HEIGHT//2 - 45, field)
+            if isinstance(field, list):
+                x = WIDTH//2 - (len(field)*35)
+                for c in field:
+                    draw_card(x, HEIGHT//2 - 45, c)
+                    x += 70
+            else:
+                draw_card(WIDTH//2 - 30, HEIGHT//2 - 45, field)
 
-        draw_player_hand(hands[0])
+        draw_player_hand(hands[0], selected_cards)
 
         screen.blit(font.render(f"CPU1：{len(hands[1])}枚", True, (255, 255, 255)), (WIDTH//2 - 80, 30))
         screen.blit(font.render(f"CPU2：{len(hands[2])}枚", True, (255, 255, 255)), (50, 150))
         screen.blit(font.render(f"CPU3：{len(hands[3])}枚", True, (255, 255, 255)), (WIDTH - 180, 150))
 
         draw_pass_button()
+        draw_play_button()
 
         msg = font.render(message, True, (255, 255, 255))
         screen.blit(msg, (50, 300))
