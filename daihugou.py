@@ -21,6 +21,12 @@ def card_to_text(card):
     s, r = card
     return f"{s}{r if r <= 10 else rank_name[r]}"
 
+def is_stronger(new_rank, base_rank, revolution):
+    if not revolution:
+        return new_rank > base_rank
+    else:
+        return new_rank < base_rank # 革命中は逆
+
 def create_deck():
     deck = [(s, r) for s in suits for r in ranks]
     random.shuffle(deck)
@@ -29,7 +35,7 @@ def create_deck():
 # -------------------------
 # CPUの行動（複数枚出し対応）
 # -------------------------
-def cpu_play(hand, field):
+def cpu_play(hand, field, revolution):
     if len(hand) == 0:
         return None
 
@@ -43,13 +49,24 @@ def cpu_play(hand, field):
     # -------------------------
     if field is None:
         multi = [g for g in groups.values() if len(g) >= 2]
+        
         if multi:
-            play = min(multi, key=lambda g: g[0][1])
+            play = (
+                min(multi, key=lambda g: g[0][1])
+                if not revolution
+                else max(multi, key=lambda g: g[0][1])
+            )# 複数枚出し優先（革命中は強い方を優先）
+
             for c in play:
                 hand.remove(c)
             return play
 
-        card = min(hand, key=lambda c: c[1])
+        card = (
+            min(hand, key=lambda c: c[1])
+            if not revolution
+            else max(hand, key=lambda c: c[1])
+            )
+        
         hand.remove(card)
         return card
 
@@ -62,7 +79,7 @@ def cpu_play(hand, field):
 
         candidates = []
         for r, g in groups.items():
-            if len(g) == need and r > base_rank:
+            if len(g) == need and is_stronger(r, base_rank, revolution):
                 candidates.append(g)
 
         if candidates:
@@ -78,9 +95,14 @@ def cpu_play(hand, field):
     # -------------------------
     base_rank = field[1]
 
-    valid = [c for c in hand if c[1] > base_rank]
+    valid = [c for c in hand if is_stronger(c[1], base_rank, revolution)]
+    
     if valid:
-        card = min(valid, key=lambda c: c[1])
+        card = (
+            min(valid, key=lambda c: c[1])
+            if not revolution
+            else max(valid, key=lambda c: c[1])
+            )# 革命中は強い方を優先
         hand.remove(card)
         return card
 
@@ -209,6 +231,8 @@ def play_game():
     finished = []
     selected_cards = []
 
+    revolution = False # 革命フラグ
+
     turn = 0
     last_player = 0
     pass_count = 0
@@ -241,7 +265,7 @@ def play_game():
                         if len(field) != len(selected_cards):
                             message = "枚数が違います"
                             continue
-                        if selected_cards[0][1] <= field[0][1]:
+                        if not is_stronger(selected_cards[0][1], field[0][1], revolution):
                             message = "弱いです"
                             continue
 
@@ -250,7 +274,7 @@ def play_game():
                         if len(selected_cards) != 1:
                             message = "複数枚出しはできません（場が1枚）"
                             continue
-                        if selected_cards[0][1] <= field[1]:
+                        if not is_stronger(selected_cards[0][1], field[1], revolution):
                             message = "弱いです"
                             continue
 
@@ -262,6 +286,15 @@ def play_game():
                         field = selected_cards[0]
                     else:
                         field = selected_cards.copy()
+
+                    # 革命
+                    if len(selected_cards) == 4:
+                        revolution = not revolution
+
+                        if revolution:
+                            message = "革命発動！ 強さが逆転した！"
+                        else:
+                            message = "革命返し！ 強さが元に戻った！"
 
                     selected_cards.clear()
                     last_player = 0
@@ -298,9 +331,17 @@ def play_game():
 
             pg.time.wait(300)
 
-            card = cpu_play(hands[turn], field)
+            card = cpu_play(hands[turn], field, revolution)
             if card:
                 field = card
+
+                if isinstance(card, list) and len(card) == 4:
+                    revolution = not revolution
+
+                    if revolution:
+                        message = "革命発動！"
+                    else:
+                        message = "革命返し！"
 
                 if isinstance(card, list):
                     text = " ".join(card_to_text(c) for c in card)
@@ -339,6 +380,14 @@ def play_game():
 
         # 描画
         screen.fill((0, 120, 0))
+
+        # 革命表示
+        if revolution:
+            rev_text = font.render("革命中", True, (255, 50, 50))
+        else:
+            rev_text = font.render("通常", True, (255, 255, 255))
+
+        screen.blit(rev_text, (700, 50))
 
         # 場の描画
         if field:
