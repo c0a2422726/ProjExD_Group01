@@ -254,6 +254,41 @@ def play_game():
                             message = "弱いです"
                             continue
 
+
+                    #スキップ処理
+
+                   # i = 0
+                    #sk = 0
+                    for i in range(len(selected_cards)):
+                        if(selected_cards[i][1] == 5) :     
+                            i += 1
+                            field = selected_cards[0]
+                            print(field)
+
+                            if(len(selected_cards) <= 2 - len(finished)):
+                                sk = len(selected_cards) + 1 - len(finished)
+                            else:
+                                turn = 0
+                                
+                        elif(selected_cards[i][1] == 13):
+                            i += 1
+                            field = selected_cards[0]
+                            print(field)
+
+                            if(len(selected_cards) <= 2 - len(finished)):
+                                sk = len(selected_cards) + 1 - len(finished)
+                            else:
+                                turn = 0
+                            print(i)
+                            print(turn)
+                            i = 0
+                            continue
+                            
+                        else:
+                            sk=0
+                            continue
+
+
                     # 出す処理
                     for c in selected_cards:
                         hands[0].remove(c)
@@ -263,12 +298,22 @@ def play_game():
                     else:
                         field = selected_cards.copy()
 
-                    selected_cards.clear()
-                    last_player = 0
-                    pass_count = 0
-                    turn = 1
-                    message = "カードを出した"
-                    continue
+                #スキップ時の処理
+                    if(sk >= 1):
+                        selected_cards.clear()
+                        last_player = 0
+                        pass_count = 0
+                        turn = sk
+                        message = "スキップ！"
+                        continue
+
+                    else:
+                        selected_cards.clear()
+                        last_player = 0
+                        pass_count = 0
+                        turn = 1
+                        message = "カードを出した"
+                        continue
 
                 # PASS
                 pass_rect = draw_pass_button()
