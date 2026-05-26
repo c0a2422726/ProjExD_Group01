@@ -1,11 +1,13 @@
 import pygame as pg
 import random
 import sys
+import os
 
 pg.init()
 WIDTH, HEIGHT = 900, 600
 screen = pg.display.set_mode((WIDTH, HEIGHT))
 pg.display.set_caption("大富豪（複数枚＋階段＋CPU対応 完全版）")
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 clock = pg.time.Clock()
 
 font = pg.font.SysFont("meiryo", 24)
@@ -61,15 +63,14 @@ def find_straights(hand):
             temp.append(hand_sorted[i])#tempに追加
         else:
             if len(temp) >= 2:
-                straights.append(temp.copy())
+                straights.append(temp.copy())#strairhtsのlistを変更しないようにそのコピーを渡す
             temp = [hand_sorted[i]]
     if len(temp) >= 2:
-        straights.append(temp.copy())
+        straights.append(temp.copy())#strairhtsのlistを変更しないようにそのコピーを渡す
     return straights
 
 def cpu_play(hand, field):
     """
-    # -------------------------
     # CPUの行動（複数枚＋階段対応）
     # 引数：手札とその場
     """
@@ -90,7 +91,7 @@ def cpu_play(hand, field):
         
         # 1. 最弱の階段
         if straights:
-            play = min(straights, key=lambda s: s[-1][1])
+            play = min(straights, key=lambda s: s[-1][1])#手札の複数の階段で最小のものを選ぶ
             for c in play:
                 hand.remove(c)
             return play
@@ -98,35 +99,34 @@ def cpu_play(hand, field):
         # 2. 最弱の複数枚（同ランク）
         multi = [g for g in groups.values() if len(g) >= 2]
         if multi:
-            play = min(multi, key=lambda g: g[0][1])
+            play = min(multi, key=lambda g: g[0][1])#手札の複数のカードで最小のものを選ぶ
             for c in play:
                 hand.remove(c)
             return play
 
         # 3. 最弱の1枚
-        card = min(hand, key=lambda c: c[1])
+        card = min(hand, key=lambda c: c[1])#手札の最小のカードを出す
         hand.remove(card)
         return card
 
     if isinstance(field, list):
-        """
         # -------------------------
         # 場がリスト（複数枚 or 階段）
         # -------------------------
-        """
+
         # 場が階段かどうか
         if is_straight(field):
-            need = len(field)
-            field_ranks = sorted(c[1] for c in field)
-            max_f = field_ranks[-1]
-            start_needed = max_f + 1
+            need = len(field)#場のカードの枚数
+            field_ranks = sorted(c[1] for c in field)#場の数字を並び替える
+            max_f = field_ranks[-1]#場の数字の最大を取る
+            start_needed = max_f + 1#始まりはそのカードの＋１から始める
             # 「場の最大の次の数字から始まる同じ長さの階段」
             candidates = []
             for s in straights:
-                if len(s) != need:
+                if len(s) != need:#文字数の確認
                     continue
                 ranks_s = sorted(c[1] for c in s)
-                if ranks_s[0] == start_needed:
+                if ranks_s[0] == start_needed:#最大数の候補の取得
                     candidates.append(s)
             if candidates:
                 play = min(candidates, key=lambda s: s[-1][1])
