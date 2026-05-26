@@ -156,7 +156,7 @@ def cpu_play(hand, field, revolution, locked_suit):
     if not revolution:
         best = min(legal, key=lambda mv: max(c[1] for c in mv))
     else:
-        best = max(legal, key=lambda mv: max(c[1] for c in mv))
+        best = max(legal, key=lambda mv: min(c[1] for c in mv))
 
     # 手札から削除
     for c in best:
@@ -375,13 +375,24 @@ def play_game():
                         message = "スキップ！"
                         continue
                     
-                    else: #通常のカード処理
+                    
+
+                    #8切り
+                    if selected_cards[0][1] == 8:
+                        message = "8切り！場が流れた！" #メッセージ表示
+                        field = None
+                        locked_suit = None #マーク縛り解除
                         selected_cards.clear()
-                        last_player = 0
                         pass_count = 0
-                        turn = 1
-                        message = "カードを出した"
+                        turn = 0 #8を出した人が次も先攻
                         continue
+
+
+                    selected_cards.clear()
+                    last_player = 0
+                    pass_count = 0
+                    turn = 1
+                    continue
 
                 # PASS
                 pass_rect = draw_pass_button()
@@ -430,6 +441,26 @@ def play_game():
                 last_player = turn
                 pass_count = 0
 
+                #8切り
+                rank = card[0][1] if isinstance(card, list) else card[1]
+
+                if rank == 8:
+                    message = f"CPU{turn} は8を出して場が流れた！" #メッセージ表示
+                    field = None
+                    locked_suit = None #マーク縛り解除
+                    pass_count = 0
+                    last_player = turn #最後に出した人の記録
+                    turn = turn #最後に出した人が次も先攻
+                else:
+
+                    if isinstance(card, list):
+                        text = " ".join(card_to_text(c) for c in card)
+                        message = f"CPU{turn} は {text} を出した"
+                    else:
+                        message = f"CPU{turn} は {card_to_text(card)} を出した"
+
+                    last_player = turn
+                    pass_count = 0
             else:
                 message = f"CPU{turn} はパスした"
                 pass_count += 1
